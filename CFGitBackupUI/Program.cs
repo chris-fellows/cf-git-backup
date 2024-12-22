@@ -32,10 +32,13 @@ namespace CFGitBackupUI
         static IHostBuilder CreateHostBuilder()
         {            
             return Host.CreateDefaultBuilder()
-                .ConfigureServices((context, services) => {
-                    var dataFolder = System.Configuration.ConfigurationManager.AppSettings.Get("DataFolder");
-                    Directory.CreateDirectory(dataFolder);
+                .ConfigureServices((context, services) => 
+                {
+                    // Register data services
+                    var dataFolder = System.Configuration.ConfigurationManager.AppSettings.Get("DataFolder")
+                                .Replace("{process-folder}", Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location));
 
+                    Directory.CreateDirectory(dataFolder);
                     services.AddTransient<IGitConfigService>((scope) =>
                     {
                         return new XmlGitConfigService(Path.Combine(dataFolder, "GitConfig"));                        
@@ -44,8 +47,12 @@ namespace CFGitBackupUI
                     {
                         return new XmlGitRepoBackupConfigService(Path.Combine(dataFolder, "GitRepoBackupConfig"));
                     });
+
+                    // Register other services
                     services.AddTransient<IGitRepoBackupService, GitRepoBackupService>();
                     services.RegisterAllTypes<IGitRepoService>(new[] { typeof(GitConfig).Assembly });
+
+                    // Register forms
                     services.AddTransient<MainForm>();
                 });
         }

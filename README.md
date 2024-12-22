@@ -1,3 +1,3 @@
 # cf-git-backup
 
-Backups up Git repositories either manually or automatically.
+Backs up Git repositories either manually or automatically. Currently only works for GitHub.

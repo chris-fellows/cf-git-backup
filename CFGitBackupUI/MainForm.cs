@@ -13,6 +13,7 @@ namespace CFGitBackupUI
         private System.Timers.Timer _timer = null;
         private Task? _backupRepoTask;
         private GitRepoBackupConfig? _backupGitRepoBackupConfig;
+        private bool _isTaskTray = false;
 
         private readonly IGitConfigService _gitConfigService;
         private readonly IGitRepoBackupConfigService _gitRepoBackupConfigService;
@@ -126,7 +127,10 @@ namespace CFGitBackupUI
 
         private void RunSilent()
         {
-
+            _isTaskTray = true;
+            niNotify.Icon = this.Icon;      // SystemIcons.Application doesn't work
+            niNotify.Text = "Git BackupSync Folders - Idle";
+            WindowState = FormWindowState.Minimized;
         }
 
         private void RunInTray()
@@ -283,14 +287,14 @@ namespace CFGitBackupUI
                 {
                     var gitConfig = _gitConfigService.GetById(gitRepoBackupConfig.GitConfigId);
 
-                    DisplayStatus($"Backing up {gitRepoBackupConfig.RepoName}");                    
+                    DisplayStatus($"Backing up {gitRepoBackupConfig.RepoName}");
                     SetGitRepoBackupConfigStatus(gitRepoBackupConfig.Id, "Backing up");
 
                     _backupGitRepoBackupConfig = gitRepoBackupConfig;
                     _backupRepoTask = _gitRepoBackupService.BackupRepoAsync(gitConfig, gitRepoBackupConfig);
 
                     // Wait for completion
-                    while(!_backupRepoTask.IsCompleted)
+                    while (!_backupRepoTask.IsCompleted)
                     {
                         System.Threading.Thread.Sleep(1000);
                     }
@@ -303,6 +307,38 @@ namespace CFGitBackupUI
                 }
 
                 DisplayStatus("Ready");
+            }
+        }
+
+        private void niNotify_MouseDoubleClick(object sender, MouseEventArgs e)
+        {
+            if (_isTaskTray)
+            {
+                Show();
+                WindowState = FormWindowState.Normal;
+            }
+        }
+
+        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            // If closing form with task tray then prompt user
+            if (e.CloseReason == CloseReason.UserClosing && _isTaskTray)
+            {
+                if (MessageBox.Show("Close application?", "Close", MessageBoxButtons.YesNo) == DialogResult.No)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+            }
+
+            niNotify.Dispose();
+        }
+
+        private void MainForm_Resize(object sender, EventArgs e)
+        {
+            if (_isTaskTray && FormWindowState.Minimized == WindowState)
+            {
+                Hide();
             }
         }
     }
