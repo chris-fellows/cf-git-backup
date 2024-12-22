@@ -1,14 +1,8 @@
 ﻿using CFGitBackup.Constants;
 using CFGitBackup.Interfaces;
 using CFGitBackup.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
-using System.Xml.Linq;
 
 namespace CFGitBackup.Services
 {
@@ -66,48 +60,46 @@ namespace CFGitBackup.Services
             }
             return gitRepos.OrderBy(r => r.Name).ToList();
         }
-
-        public async Task DownloadRepo(string name, string localFolder)
-        {
-            Directory.CreateDirectory(localFolder);
-
+   
+        public async Task DownloadRepo(string name, IFileStorage fileStorage)
+        {            
             using (var httpClient = new HttpClient())
             {
                 SetDefaultHeaders(httpClient);
-                
+
                 var response = httpClient.GetAsync($"{_config.APIBaseURL}/repos/{_config.Owner}/{name}/contents").Result;
 
                 var data = await response.Content.ReadAsStringAsync();
 
-                var items = JsonSerializer.Deserialize<JsonArray>(data);
+                var items = JsonSerializer.Deserialize<JsonArray>(data);                
 
                 // Download each file/folder
-                foreach(var item in items)
-                {                    
-                    switch((string)item["type"])
+                foreach (var item in items)
+                {
+                    switch ((string)item["type"])
                     {
                         case "file":
-                            var file = Path.Combine(localFolder, (string)item["name"]);
-                            await DownloadFile((string)item["download_url"], file);
+                            var fileName = (string)item["name"];
+                            await DownloadFile((string)item["download_url"], new string[0], fileName, fileStorage);
                             break;
                         case "dir":
-                            var folder = Path.Combine(localFolder, (string)item["name"]);
-                            await DownloadFolder((string)item["url"], folder);
-                            break;                   
+                            var folderName = (string)item["name"];
+                            await DownloadFolder((string)item["url"], new[] { folderName }, fileStorage);
+                            break;
                     }
-                }
-
-                int zzz = 1000;
-            }            
+                }                
+            }
         }
 
         /// <summary>
-        /// Downloads file
+        /// Downloads file to file storage
         /// </summary>
         /// <param name="remoteUrl"></param>
-        /// <param name="localFile"></param>
+        /// <param name="folderNames"></param>
+        /// <param name="fileName"></param>
+        /// <param name="fileStorage"></param>
         /// <returns></returns>
-        private async Task DownloadFile(string remoteUrl, string localFile)
+        private async Task DownloadFile(string remoteUrl, string[] folderNames, string fileName, IFileStorage fileStorage)
         {
             using (var httpClient = new HttpClient())
             {
@@ -118,30 +110,27 @@ namespace CFGitBackup.Services
                 // Read the content into a MemoryStream and then write to file
                 using (var memoryStream = await response.Content.ReadAsStreamAsync())
                 {
-                    using (var fileStream = File.Create(localFile))
-                    {
-                        //await memoryStream.CopyToAsync(fileStream);   // Hangs
-                        memoryStream.CopyTo(fileStream);
-                        fileStream.Flush();
-                    }                    
-                }                
+                    var content = new byte[memoryStream.Length];
+                    memoryStream.Read(content, 0, content.Length);
+
+                    await fileStorage.WriteFileAsync(folderNames, fileName, content);
+                }
             }
         }
 
         /// <summary>
-        /// Downloads folder
+        /// Downloads folder to file storage
         /// </summary>
         /// <param name="remoteUrl"></param>
-        /// <param name="localFolder"></param>
+        /// <param name="folderNames"></param>
+        /// <param name="fileStorage"></param>
         /// <returns></returns>
-        private async Task DownloadFolder(string remoteUrl, string localFolder)
-        {
-            Directory.CreateDirectory(localFolder);
-
+        private async Task DownloadFolder(string remoteUrl, string[] folderNames, IFileStorage fileStorage)
+        {            
             using (var httpClient = new HttpClient())
             {
                 SetDefaultHeaders(httpClient);
-                
+
                 var response = httpClient.GetAsync(remoteUrl).Result;
 
                 var data = await response.Content.ReadAsStringAsync();
@@ -153,13 +142,20 @@ namespace CFGitBackup.Services
                     switch ((string)item["type"])
                     {
                         case "file":
-                            var file = Path.Combine(localFolder, (string)item["name"]);
-                            await DownloadFile((string)item["download_url"], file);
+                            var fileName = (string)item["name"];
+
+                            await DownloadFile((string)item["download_url"], folderNames, fileName, fileStorage);
                             break;
                         case "dir":
-                            var folder = Path.Combine(localFolder, (string)item["name"]);
-                            await DownloadFolder((string)item["url"], folder);
-                            break;                     
+                            var folderName = (string)item["name"];
+
+                            // Pass this folder & parent folders
+                            var folderNamesCopy = (string[])folderNames.Clone();                            
+                            Array.Resize(ref folderNamesCopy, folderNamesCopy.Length + 1);
+                            folderNamesCopy[folderNamesCopy.Length - 1] = folderName;
+
+                            await DownloadFolder((string)item["url"], folderNamesCopy, fileStorage);
+                            break;
                     }
                 }
             }

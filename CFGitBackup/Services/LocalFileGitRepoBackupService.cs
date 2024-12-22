@@ -1,15 +1,20 @@
-﻿using CFGitBackup.Interfaces;
+﻿using CFGitBackup.FileStorages;
+using CFGitBackup.Interfaces;
 using CFGitBackup.Models;
 using CFGitBackup.Utilities;
+using System.IO.Compression;
 
 namespace CFGitBackup.Services
 {
-    public class GitRepoBackupService : IGitRepoBackupService
+    /// <summary>
+    /// Backups up Git repo to local file system
+    /// </summary>
+    public class LocalFileGitRepoBackupService : IGitRepoBackupService
     {
         private readonly List<IGitRepoService> _gitRepoServices;
         private readonly IGitRepoBackupConfigService _gitRepoBackupConfigService;
 
-        public GitRepoBackupService(IGitRepoBackupConfigService gitRepoBackupConfigService,
+        public LocalFileGitRepoBackupService(IGitRepoBackupConfigService gitRepoBackupConfigService,
                                     IEnumerable<IGitRepoService> gitRepoServices)
         {
             _gitRepoBackupConfigService = gitRepoBackupConfigService;
@@ -18,21 +23,52 @@ namespace CFGitBackup.Services
 
         public Task BackupRepoAsync(GitConfig gitConfig, GitRepoBackupConfig gitBackupConfig)
         {
-            var task = Task.Factory.StartNew(() =>
+            // Check parameters
+            if (String.IsNullOrEmpty(gitBackupConfig.LocalFolder))
             {
+                throw new ArgumentException("Local folder must be set");
+            }
+            if (String.IsNullOrEmpty(gitBackupConfig.RepoName))
+            {
+                throw new ArgumentException("Repo name must be set");
+            }
+
+            var task = Task.Factory.StartNew(() =>
+            {              
                 // Get Git repo service
                 var gitRepoService = _gitRepoServices.First(s => s.PlatformName == gitConfig.PlatformName);
                 gitRepoService.SetConfig(gitConfig);
-
-                // Set temp folder for downloading Git repo to, only used if we need to create .zip
-                var tempFolder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
                 
-                // Set folder to download Git repo to. If compressed then download to temp folder else directly to local folder
-                var downloadFolder = gitBackupConfig.Compressed ? tempFolder : gitBackupConfig.LocalFolder;
-
                 Directory.CreateDirectory(gitBackupConfig.LocalFolder);
-                Directory.CreateDirectory(downloadFolder);
 
+                // Set zip file to use
+                var zipFile = Path.Combine(gitBackupConfig.LocalFolder,
+                                string.IsNullOrEmpty(gitBackupConfig.CompressedFileName) ? $"{gitBackupConfig.RepoName}.zip" : gitBackupConfig.CompressedFileName);
+
+                // Set IFileStorage
+                // TODO: Extend this to include other cloud storage formats
+                IFileStorage fileStorage = gitBackupConfig.Compressed switch
+                {
+                    true => new ZipFileFileStorage(zipFile),
+                    _ => new LocalFileSystemFileStorage(gitBackupConfig.LocalFolder)
+                };
+
+                // Clear existing content
+                fileStorage.Clear();
+
+                try
+                {
+                    // Download Git repo
+                    gitRepoService.DownloadRepo(gitBackupConfig.RepoName, fileStorage).Wait();
+                }
+                finally
+                {
+
+                    // Flush changes
+                    fileStorage.Close();
+                }
+
+                /*
                 // Download Git repo
                 gitRepoService.DownloadRepo(gitBackupConfig.RepoName, downloadFolder).Wait();
 
@@ -48,6 +84,7 @@ namespace CFGitBackup.Services
 
                     Directory.Delete(tempFolder, true);
                 }
+                */
 
                 // Update last backup
                 var gitBackupConfigCurrent = _gitRepoBackupConfigService.GetById(gitBackupConfig.Id);
@@ -57,7 +94,7 @@ namespace CFGitBackup.Services
 
             return task;
         }
-
+    
         public List<GitRepoBackupConfig> GetOverdueBackups()
         {                                
             var now = DateTimeOffset.UtcNow;

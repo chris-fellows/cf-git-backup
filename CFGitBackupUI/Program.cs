@@ -49,7 +49,7 @@ namespace CFGitBackupUI
                     });
 
                     // Register other services
-                    services.AddTransient<IGitRepoBackupService, GitRepoBackupService>();
+                    services.AddTransient<IGitRepoBackupService, LocalFileGitRepoBackupService>();
                     services.RegisterAllTypes<IGitRepoService>(new[] { typeof(GitConfig).Assembly });
 
                     // Register forms

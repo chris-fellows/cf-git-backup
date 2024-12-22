@@ -1,9 +1,4 @@
 ﻿using CFGitBackup.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CFGitBackup.Interfaces
 {
@@ -21,13 +16,13 @@ namespace CFGitBackup.Interfaces
         /// </summary>
         /// <returns></returns>
         Task<List<GitRepo>> GetAllReposAsync();
-
+        
         /// <summary>
-        /// Downloads Git repo to local folder
+        /// Downloads Git repo to file storage (Local folder/zip file etc)
         /// </summary>
         /// <param name="name"></param>
-        /// <param name="localFolder"></param>
+        /// <param name="fileStorage"></param>
         /// <returns></returns>
-        Task DownloadRepo(string name, string localFolder);
+        Task DownloadRepo(string name, IFileStorage fileStorage);
     }
 }

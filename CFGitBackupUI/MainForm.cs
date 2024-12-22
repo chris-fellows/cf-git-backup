@@ -93,38 +93,6 @@ namespace CFGitBackupUI
             }
         }
 
-        //private void TestDownloadRepo()
-        //{
-        //    var gitConfig = new GitConfig();
-        //    IGitRepoService gitRepoService = new GitHubGitRepoService();
-        //    gitRepoService.SetConfig(gitConfig);
-
-        //    gitRepoService.DownloadRepo("cf-sync-music", "D:\\Test\\CFGitBackup\\cf-sync-music").Wait();
-
-        //    var repos = gitRepoService.GetAllReposAsync().Result;
-        //}
-
-        //private async Task TestBackupRepoAsync()
-        //{
-        //    var gitConfig = new GitConfig();
-        //    IGitRepoService gitRepoService = new GitHubGitRepoService();
-        //    gitRepoService.SetConfig(gitConfig);
-
-        //    var repos = gitRepoService.GetAllReposAsync().Result;
-
-        //    var repo = repos.First(r => r.Name == "cf-document-indexer");//
-
-        //    var backupManager = new GitRepoBackupService(new List<IGitRepoService>() { gitRepoService });
-
-        //    var backupConfig = new GitRepoBackupConfig()
-        //    {
-        //        Compressed = true,
-        //        LocalFolder = "D:\\Test\\CFGitBackup\\Backups"
-        //    };
-
-        //    await backupManager.BackupRepoAsync(gitConfig, backupConfig);
-        //}
-
         private void RunSilent()
         {
             _isTaskTray = true;
@@ -138,6 +106,7 @@ namespace CFGitBackupUI
             _timer = new System.Timers.Timer();
             _timer.Elapsed += _timer_Elapsed;
             _timer.Interval = 10000 * 1;    // Run soon after launch
+            WindowState = FormWindowState.Minimized;
         }
 
         private void _timer_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
@@ -180,7 +149,7 @@ namespace CFGitBackupUI
 
         private void RunInteractive()
         {
-
+            WindowState = FormWindowState.Normal;
         }
 
         private void CheckRepoTaskResult()
