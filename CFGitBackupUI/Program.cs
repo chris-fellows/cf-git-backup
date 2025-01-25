@@ -35,17 +35,17 @@ namespace CFGitBackupUI
                 .ConfigureServices((context, services) => 
                 {
                     // Register data services
-                    var dataFolder = System.Configuration.ConfigurationManager.AppSettings.Get("DataFolder")
+                    var configurationFolder = System.Configuration.ConfigurationManager.AppSettings.Get("ConfigurationFolder")
                                 .Replace("{process-folder}", Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location));
 
-                    Directory.CreateDirectory(dataFolder);
+                    Directory.CreateDirectory(configurationFolder);
                     services.AddTransient<IGitConfigService>((scope) =>
                     {
-                        return new XmlGitConfigService(Path.Combine(dataFolder, "GitConfig"));                        
+                        return new XmlGitConfigService(Path.Combine(configurationFolder, "GitConfig"));                        
                     });
                     services.AddTransient<IGitRepoBackupConfigService>((scope) =>
                     {
-                        return new XmlGitRepoBackupConfigService(Path.Combine(dataFolder, "GitRepoBackupConfig"));
+                        return new XmlGitRepoBackupConfigService(Path.Combine(configurationFolder, "GitRepoBackupConfig"));
                     });
 
                     // Register other services

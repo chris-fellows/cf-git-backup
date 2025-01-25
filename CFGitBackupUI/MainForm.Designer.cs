@@ -39,6 +39,8 @@
             toolStrip1 = new ToolStrip();
             toolStripDropDownButton1 = new ToolStripDropDownButton();
             backUpNowToolStripMenuItem = new ToolStripMenuItem();
+            debugListAllReposToolStripMenuItem = new ToolStripMenuItem();
+            cancelBackupsToolStripMenuItem = new ToolStripMenuItem();
             niNotify = new NotifyIcon(components);
             statusStrip1.SuspendLayout();
             tabControl1.SuspendLayout();
@@ -50,9 +52,9 @@
             // statusStrip1
             // 
             statusStrip1.Items.AddRange(new ToolStripItem[] { tsslStatus });
-            statusStrip1.Location = new Point(0, 507);
+            statusStrip1.Location = new Point(0, 567);
             statusStrip1.Name = "statusStrip1";
-            statusStrip1.Size = new Size(940, 22);
+            statusStrip1.Size = new Size(965, 22);
             statusStrip1.TabIndex = 0;
             statusStrip1.Text = "statusStrip1";
             // 
@@ -70,7 +72,7 @@
             tabControl1.Location = new Point(0, 28);
             tabControl1.Name = "tabControl1";
             tabControl1.SelectedIndex = 0;
-            tabControl1.Size = new Size(940, 476);
+            tabControl1.Size = new Size(965, 536);
             tabControl1.TabIndex = 1;
             // 
             // tabPage1
@@ -79,20 +81,22 @@
             tabPage1.Location = new Point(4, 24);
             tabPage1.Name = "tabPage1";
             tabPage1.Padding = new Padding(3);
-            tabPage1.Size = new Size(932, 448);
+            tabPage1.Size = new Size(957, 508);
             tabPage1.TabIndex = 0;
             tabPage1.Text = "Git Repos";
             tabPage1.UseVisualStyleBackColor = true;
             // 
             // dgvGitRepoBackupConfig
             // 
+            dgvGitRepoBackupConfig.AllowUserToAddRows = false;
+            dgvGitRepoBackupConfig.AllowUserToDeleteRows = false;
             dgvGitRepoBackupConfig.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvGitRepoBackupConfig.Dock = DockStyle.Fill;
             dgvGitRepoBackupConfig.Location = new Point(3, 3);
             dgvGitRepoBackupConfig.Name = "dgvGitRepoBackupConfig";
             dgvGitRepoBackupConfig.ReadOnly = true;
             dgvGitRepoBackupConfig.RowHeadersVisible = false;
-            dgvGitRepoBackupConfig.Size = new Size(926, 442);
+            dgvGitRepoBackupConfig.Size = new Size(951, 502);
             dgvGitRepoBackupConfig.TabIndex = 0;
             // 
             // tabPage2
@@ -100,7 +104,7 @@
             tabPage2.Location = new Point(4, 24);
             tabPage2.Name = "tabPage2";
             tabPage2.Padding = new Padding(3);
-            tabPage2.Size = new Size(932, 448);
+            tabPage2.Size = new Size(957, 508);
             tabPage2.TabIndex = 1;
             tabPage2.Text = "Log";
             tabPage2.UseVisualStyleBackColor = true;
@@ -110,13 +114,13 @@
             toolStrip1.Items.AddRange(new ToolStripItem[] { toolStripDropDownButton1 });
             toolStrip1.Location = new Point(0, 0);
             toolStrip1.Name = "toolStrip1";
-            toolStrip1.Size = new Size(940, 25);
+            toolStrip1.Size = new Size(965, 25);
             toolStrip1.TabIndex = 2;
             toolStrip1.Text = "toolStrip1";
             // 
             // toolStripDropDownButton1
             // 
-            toolStripDropDownButton1.DropDownItems.AddRange(new ToolStripItem[] { backUpNowToolStripMenuItem });
+            toolStripDropDownButton1.DropDownItems.AddRange(new ToolStripItem[] { backUpNowToolStripMenuItem, debugListAllReposToolStripMenuItem, cancelBackupsToolStripMenuItem });
             toolStripDropDownButton1.Image = (Image)resources.GetObject("toolStripDropDownButton1.Image");
             toolStripDropDownButton1.ImageTransparentColor = Color.Magenta;
             toolStripDropDownButton1.Name = "toolStripDropDownButton1";
@@ -130,6 +134,22 @@
             backUpNowToolStripMenuItem.Text = "Back up now";
             backUpNowToolStripMenuItem.Click += backUpNowToolStripMenuItem_Click;
             // 
+            // debugListAllReposToolStripMenuItem
+            // 
+            debugListAllReposToolStripMenuItem.Name = "debugListAllReposToolStripMenuItem";
+            debugListAllReposToolStripMenuItem.Size = new Size(180, 22);
+            debugListAllReposToolStripMenuItem.Text = "Debug list all repos";
+            debugListAllReposToolStripMenuItem.Visible = false;
+            debugListAllReposToolStripMenuItem.Click += debugListAllReposToolStripMenuItem_Click;
+            // 
+            // cancelBackupsToolStripMenuItem
+            // 
+            cancelBackupsToolStripMenuItem.Name = "cancelBackupsToolStripMenuItem";
+            cancelBackupsToolStripMenuItem.Size = new Size(180, 22);
+            cancelBackupsToolStripMenuItem.Text = "Cancel backups";
+            cancelBackupsToolStripMenuItem.Visible = false;
+            cancelBackupsToolStripMenuItem.Click += cancelBackupsToolStripMenuItem_Click;
+            // 
             // niNotify
             // 
             niNotify.Text = "notifyIcon1";
@@ -140,7 +160,7 @@
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(940, 529);
+            ClientSize = new Size(965, 589);
             Controls.Add(toolStrip1);
             Controls.Add(tabControl1);
             Controls.Add(statusStrip1);
@@ -172,5 +192,7 @@
         private ToolStripDropDownButton toolStripDropDownButton1;
         private ToolStripMenuItem backUpNowToolStripMenuItem;
         private NotifyIcon niNotify;
+        private ToolStripMenuItem debugListAllReposToolStripMenuItem;
+        private ToolStripMenuItem cancelBackupsToolStripMenuItem;
     }
 }

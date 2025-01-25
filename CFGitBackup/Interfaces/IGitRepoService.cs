@@ -23,6 +23,6 @@ namespace CFGitBackup.Interfaces
         /// <param name="name"></param>
         /// <param name="fileStorage"></param>
         /// <returns></returns>
-        Task DownloadRepo(string name, IFileStorage fileStorage);
+        Task DownloadRepo(string name, IFileStorage fileStorage, CancellationToken cancellationToken);
     }
 }

@@ -38,17 +38,43 @@ namespace CFGitBackup.Services
         public async Task<List<GitRepo>> GetAllReposAsync()
         {
             var gitRepos = new List<GitRepo>();
+
+            //// Only returns public repos
+            //using (var httpClient = new HttpClient())
+            //{
+            //    SetDefaultHeaders(httpClient);
+
+            //    var response = httpClient.GetAsync($"{_config.APIBaseURL}/users/{_config.Owner}/repos?per_page=1000").Result;
+
+            //    var data = await response.Content.ReadAsStringAsync();
+
+            //    var items = JsonSerializer.Deserialize<JsonArray>(data);
+
+            //    foreach(var item in items)
+            //    {
+            //        var gitRepo = new GitRepo()
+            //        {
+            //            Name = (string)item["name"],
+            //            URL = (string)item["url"]
+            //        };
+            //        gitRepos.Add(gitRepo);
+            //    }              
+            //}
+
+            // Returns public & private repos
             using (var httpClient = new HttpClient())
             {
                 SetDefaultHeaders(httpClient);
 
-                var response = httpClient.GetAsync($"{_config.APIBaseURL}/users/{_config.Owner}/repos?per_page=1000").Result;
+                var response = httpClient.GetAsync($"{_config.APIBaseURL}/search/repositories?q=user:{_config.Owner}&per_page=1000").Result;
+
+                //https://api.github.com/search/repositories?q=user:USERNAME
 
                 var data = await response.Content.ReadAsStringAsync();
 
-                var items = JsonSerializer.Deserialize<JsonArray>(data);
-
-                foreach(var item in items)
+                var items = JsonSerializer.Deserialize<JsonObject>(data)["items"].AsArray();
+                
+                foreach (var item in items)
                 {
                     var gitRepo = new GitRepo()
                     {
@@ -56,12 +82,13 @@ namespace CFGitBackup.Services
                         URL = (string)item["url"]
                     };
                     gitRepos.Add(gitRepo);
-                }              
-            }
+                }
+            }            
+            
             return gitRepos.OrderBy(r => r.Name).ToList();
-        }
+        }   
    
-        public async Task DownloadRepo(string name, IFileStorage fileStorage)
+        public async Task DownloadRepo(string name, IFileStorage fileStorage, CancellationToken cancellationToken)
         {            
             using (var httpClient = new HttpClient())
             {
@@ -80,13 +107,15 @@ namespace CFGitBackup.Services
                     {
                         case "file":
                             var fileName = (string)item["name"];
-                            await DownloadFile((string)item["download_url"], new string[0], fileName, fileStorage);
+                            await DownloadFile((string)item["download_url"], new string[0], fileName, fileStorage, cancellationToken);
                             break;
                         case "dir":
                             var folderName = (string)item["name"];
-                            await DownloadFolder((string)item["url"], new[] { folderName }, fileStorage);
+                            await DownloadFolder((string)item["url"], new[] { folderName }, fileStorage, cancellationToken);
                             break;
                     }
+
+                    if (cancellationToken.IsCancellationRequested) break;                    
                 }                
             }
         }
@@ -99,7 +128,8 @@ namespace CFGitBackup.Services
         /// <param name="fileName"></param>
         /// <param name="fileStorage"></param>
         /// <returns></returns>
-        private async Task DownloadFile(string remoteUrl, string[] folderNames, string fileName, IFileStorage fileStorage)
+        private async Task DownloadFile(string remoteUrl, string[] folderNames, string fileName, IFileStorage fileStorage,
+                                        CancellationToken cancellationToken)
         {
             using (var httpClient = new HttpClient())
             {
@@ -125,7 +155,8 @@ namespace CFGitBackup.Services
         /// <param name="folderNames"></param>
         /// <param name="fileStorage"></param>
         /// <returns></returns>
-        private async Task DownloadFolder(string remoteUrl, string[] folderNames, IFileStorage fileStorage)
+        private async Task DownloadFolder(string remoteUrl, string[] folderNames, IFileStorage fileStorage,
+                                        CancellationToken cancellationToken)
         {            
             using (var httpClient = new HttpClient())
             {
@@ -144,7 +175,7 @@ namespace CFGitBackup.Services
                         case "file":
                             var fileName = (string)item["name"];
 
-                            await DownloadFile((string)item["download_url"], folderNames, fileName, fileStorage);
+                            await DownloadFile((string)item["download_url"], folderNames, fileName, fileStorage, cancellationToken);
                             break;
                         case "dir":
                             var folderName = (string)item["name"];
@@ -154,9 +185,11 @@ namespace CFGitBackup.Services
                             Array.Resize(ref folderNamesCopy, folderNamesCopy.Length + 1);
                             folderNamesCopy[folderNamesCopy.Length - 1] = folderName;
 
-                            await DownloadFolder((string)item["url"], folderNamesCopy, fileStorage);
+                            await DownloadFolder((string)item["url"], folderNamesCopy, fileStorage, cancellationToken);
                             break;
                     }
+
+                    if (cancellationToken.IsCancellationRequested) break;
                 }
             }
         }

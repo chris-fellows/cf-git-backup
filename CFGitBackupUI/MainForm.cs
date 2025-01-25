@@ -1,24 +1,32 @@
-using CFGitBackup;
 using CFGitBackup.Interfaces;
 using CFGitBackup.Models;
 using CFGitBackup.SeedData;
-using CFGitBackup.Services;
-using System.Configuration;
-using System.Security.Permissions;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace CFGitBackupUI
 {
     public partial class MainForm : Form
     {
-        private System.Timers.Timer _timer = null;
+        private enum RunModes : byte
+        {
+            Interactive,
+            Silent,
+            Tray
+        }
+
+        private System.Timers.Timer? _timer = null;
         private Task? _backupRepoTask;
         private GitRepoBackupConfig? _backupGitRepoBackupConfig;
-        private bool _isTaskTray = false;
+        private RunModes _runMode;
+
+        private CancellationTokenSource? _cancellationTokenSource;
 
         private readonly IGitConfigService _gitConfigService;
         private readonly IGitRepoBackupConfigService _gitRepoBackupConfigService;
         private readonly IGitRepoBackupService _gitRepoBackupService;
         private readonly List<IGitRepoService> _gitRepoServices;
+
+        private readonly List<string> _backupConfigIdQueue = new List<string>();
 
         public MainForm(IGitConfigService gitConfigService,
                         IGitRepoBackupConfigService gitRepoBackupConfigService,
@@ -56,8 +64,6 @@ namespace CFGitBackupUI
             //TestBackupRepoAsync().Wait();
 
             DisplayStatus("Ready");
-
-            int xxx = 1000;
         }
 
         /// <summary>
@@ -95,60 +101,120 @@ namespace CFGitBackupUI
 
         private void RunSilent()
         {
-            _isTaskTray = true;
-            niNotify.Icon = this.Icon;      // SystemIcons.Application doesn't work
-            niNotify.Text = "Git BackupSync Folders - Idle";
+            _runMode = RunModes.Silent;
+           
             WindowState = FormWindowState.Minimized;
         }
 
         private void RunInTray()
         {
+            _runMode = RunModes.Tray;
+            niNotify.Icon = this.Icon;      // SystemIcons.Application doesn't work
+            niNotify.Text = "Git Backup - Idle";
+
+            backUpNowToolStripMenuItem.Enabled = false;            
+
+            // Enable timer
             _timer = new System.Timers.Timer();
             _timer.Elapsed += _timer_Elapsed;
             _timer.Interval = 10000 * 1;    // Run soon after launch
+
             WindowState = FormWindowState.Minimized;
         }
 
         private void _timer_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
         {
+            int shortInterval = 10000;  // Default
             try
             {
                 _timer.Enabled = false;
-            }
-            catch (Exception exception)
-            {
+
                 CheckRepoTaskResult();
 
-                // Run overdue backups
-                if (_backupRepoTask == null)
+                switch (_runMode)
                 {
-                    var gitRepoBackupConfig = _gitRepoBackupService.GetOverdueBackups().FirstOrDefault();
+                    case RunModes.Interactive:
+                        // Run next queued backup if any
+                        shortInterval = 1000;   // So that we start next backup ASAP if required
+                        if (_backupRepoTask == null &&
+                            _backupConfigIdQueue.Any())
+                        {
+                            // Get config
+                            var gitRepoBackupConfig = _gitRepoBackupConfigService.GetById(_backupConfigIdQueue.First());
 
-                    if (gitRepoBackupConfig != null)    // Overdue
-                    {
-                        // Get Git config
-                        var gitConfig = _gitConfigService.GetById(gitRepoBackupConfig.GitConfigId);
+                            // Start backup (Removes from queue)
+                            StartRepoTask(gitRepoBackupConfig);
+                        }
+ 
+                        break;
+                    case RunModes.Tray:
+                        // Run overdue backups
+                        shortInterval = 10000;
+                        if (_backupRepoTask == null)
+                        {
+                            var gitRepoBackupConfig = _gitRepoBackupService.GetOverdueBackups().FirstOrDefault();
 
-                        // Start backup                        
-                        DisplayStatus($"Backing up {gitRepoBackupConfig.RepoName}");
-                        SetGitRepoBackupConfigStatus(gitRepoBackupConfig.Id, "Backing up");
+                            if (gitRepoBackupConfig != null)    // Overdue
+                            {
+                                StartRepoTask(gitRepoBackupConfig);
+                            }
+                        }
 
-                        _backupGitRepoBackupConfig = gitRepoBackupConfig;
-                        _backupRepoTask = _gitRepoBackupService.BackupRepoAsync(gitConfig, gitRepoBackupConfig);
-                    }
+                        break;
                 }
 
                 CheckRepoTaskResult();
             }
             finally
             {
-                _timer.Interval = _backupRepoTask == null ? 60000 : 10000;
+                _timer.Interval = _backupRepoTask == null ? 60000 : shortInterval;
                 _timer.Enabled = true;
             }
         }
 
+        /// <summary>
+        /// Starts task to backup Git repo
+        /// </summary>
+        /// <param name="gitRepoBackupConfig"></param>
+        private void StartRepoTask(GitRepoBackupConfig gitRepoBackupConfig)
+        {
+            // Create cancellation token
+            _cancellationTokenSource = new CancellationTokenSource();
+
+            // Remove from queue if exists
+            _backupConfigIdQueue.RemoveAll(c => c == gitRepoBackupConfig.Id);
+
+            // Get Git config
+            var gitConfig = _gitConfigService.GetById(gitRepoBackupConfig.GitConfigId);
+                    
+            // Update UI status in UI thread
+            this.Invoke((Action)delegate
+            {
+                try
+                {
+                    DisplayStatus($"Backing up {gitRepoBackupConfig.RepoName}");
+                    SetGitRepoBackupConfigStatus(gitRepoBackupConfig.Id, "Backing up");
+                }
+                catch { };  // Ignore
+            });
+
+            // Start backup                
+            _backupGitRepoBackupConfig = gitRepoBackupConfig;
+            _backupRepoTask = _gitRepoBackupService.BackupRepoAsync(gitConfig, gitRepoBackupConfig, _cancellationTokenSource.Token);
+        }
+
         private void RunInteractive()
         {
+            _runMode = RunModes.Interactive;
+
+            backUpNowToolStripMenuItem.Enabled = true;
+
+            // Initialise timer
+            _timer = new System.Timers.Timer();
+            _timer.Elapsed += _timer_Elapsed;
+            _timer.Enabled = false;
+            _timer.Interval = 60000;
+
             WindowState = FormWindowState.Normal;
         }
 
@@ -157,23 +223,43 @@ namespace CFGitBackupUI
             if (_backupRepoTask != null &&
                 _backupRepoTask.IsCompleted)
             {
-                if (_backupRepoTask.Exception != null)
+                this.Invoke((Action)delegate
                 {
-                    SetGitRepoBackupConfigStatus(_backupGitRepoBackupConfig.Id, $"Error: {_backupRepoTask.Exception.Message}");
-                }
-                else
-                {
-                    SetGitRepoBackupConfigStatus(_backupGitRepoBackupConfig.Id, "Backed up");
-                }
+                    try
+                    {
+                        if (_cancellationTokenSource.IsCancellationRequested)
+                        {
+                            SetGitRepoBackupConfigStatus(_backupGitRepoBackupConfig.Id, $"Cancelled");
+                        }
+                        else if (_backupRepoTask.Exception != null)
+                        {
+                            SetGitRepoBackupConfigStatus(_backupGitRepoBackupConfig.Id, $"Error: {_backupRepoTask.Exception.Message}");
+                        }
+                        else
+                        {
+                            SetGitRepoBackupConfigStatus(_backupGitRepoBackupConfig.Id, "Backed up");
+                        }
+                    }
+                    catch { };  // Ignore
+                });
 
                 _backupRepoTask = null;
                 _backupGitRepoBackupConfig = null;
+
+                // If no more queued backups then re-enable Backup All menu item
+                if (!_backupConfigIdQueue.Any() &&
+                    _runMode == RunModes.Interactive)                     
+                {
+                    backUpNowToolStripMenuItem.Visible = true;
+                    cancelBackupsToolStripMenuItem.Visible = false;
+                }
             }
         }
 
         private void DisplayStatus(string status)
         {
             tsslStatus.Text = $" {status}";
+            statusStrip1.Update();
         }
 
         private void DisplayGitRepoBackupConfigs()
@@ -185,10 +271,15 @@ namespace CFGitBackupUI
             dgvGitRepoBackupConfig.Columns.Clear();
 
             int columnIndex = dgvGitRepoBackupConfig.Columns.Add("Repo", "Repo");
+            dgvGitRepoBackupConfig.Columns[columnIndex].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
             columnIndex = dgvGitRepoBackupConfig.Columns.Add("Platform", "Platform");
+            dgvGitRepoBackupConfig.Columns[columnIndex].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
             columnIndex = dgvGitRepoBackupConfig.Columns.Add("Last Backup", "Last Backup");
+            dgvGitRepoBackupConfig.Columns[columnIndex].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
             columnIndex = dgvGitRepoBackupConfig.Columns.Add("Folder", "Folder");
+            dgvGitRepoBackupConfig.Columns[columnIndex].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
             columnIndex = dgvGitRepoBackupConfig.Columns.Add("Status", "Status");
+            dgvGitRepoBackupConfig.Columns[columnIndex].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
 
             foreach (var gitRepoBackupConfig in gitRepoBackupConfigs)
             {
@@ -228,6 +319,8 @@ namespace CFGitBackupUI
                     dgvGitRepoBackupConfig.Rows.Add(row);
                 }
             }
+
+            dgvGitRepoBackupConfig.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.AllCells);
         }
 
         private void SetGitRepoBackupConfigStatus(string gitRepoBackupConfigId, string status)
@@ -248,40 +341,62 @@ namespace CFGitBackupUI
         {
             if (MessageBox.Show("Back up all Git repos?", "Back Up", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
-                DisplayStatus("Backing up Git repos");
+                //DisplayStatus("Backing up Git repos");
 
                 var gitRepoBackupConfigs = _gitRepoBackupConfigService.GetAll().Where(c => c.Enabled).ToList();
 
-                foreach (var gitRepoBackupConfig in gitRepoBackupConfigs)
-                {
-                    var gitConfig = _gitConfigService.GetById(gitRepoBackupConfig.GitConfigId);
+                // Add backup configs to queue
+                _backupConfigIdQueue.Clear();
+                _backupConfigIdQueue.AddRange(gitRepoBackupConfigs.Select(c => c.Id));
 
-                    DisplayStatus($"Backing up {gitRepoBackupConfig.RepoName}");
-                    SetGitRepoBackupConfigStatus(gitRepoBackupConfig.Id, "Backing up");
+                // Disable until all backups complete
+                backUpNowToolStripMenuItem.Visible = false;
+                cancelBackupsToolStripMenuItem.Visible = true;
 
-                    _backupGitRepoBackupConfig = gitRepoBackupConfig;
-                    _backupRepoTask = _gitRepoBackupService.BackupRepoAsync(gitConfig, gitRepoBackupConfig);
+                // Enable timer to process queue
+                _timer.Interval = 500;                
+                _timer.Enabled = true;
 
-                    // Wait for completion
-                    while (!_backupRepoTask.IsCompleted)
-                    {
-                        System.Threading.Thread.Sleep(1000);
-                    }
+                //foreach (var gitRepoBackupConfig in gitRepoBackupConfigs)
+                //{
+                //    var gitConfig = _gitConfigService.GetById(gitRepoBackupConfig.GitConfigId);
 
-                    DisplayStatus($"Backed up {gitRepoBackupConfig.RepoName}");
-                    SetGitRepoBackupConfigStatus(gitRepoBackupConfig.Id, "Backed up");
+                //    DisplayStatus($"Backing up {gitRepoBackupConfig.RepoName}");
+                //    SetGitRepoBackupConfigStatus(gitRepoBackupConfig.Id, "Backing up");
 
-                    _backupGitRepoBackupConfig = null;
-                    _backupRepoTask = null;
-                }
+                //    // Start backup task
+                //    _backupGitRepoBackupConfig = gitRepoBackupConfig;
+                //    _backupRepoTask = _gitRepoBackupService.BackupRepoAsync(gitConfig, gitRepoBackupConfig);
 
-                DisplayStatus("Ready");
+                //    // Wait for completion
+                //    while (!_backupRepoTask.IsCompleted)
+                //    {
+                //        System.Threading.Thread.Sleep(500);
+                //    }
+
+                //    // Display status
+                //    if (_backupRepoTask.IsFaulted)
+                //    {
+                //        DisplayStatus($"Error backing up {gitRepoBackupConfig.RepoName}");
+                //        SetGitRepoBackupConfigStatus(gitRepoBackupConfig.Id, $"Error: {_backupRepoTask.Exception.Message}");
+                //    }
+                //    else
+                //    {
+                //        DisplayStatus($"Backed up {gitRepoBackupConfig.RepoName}");
+                //        SetGitRepoBackupConfigStatus(gitRepoBackupConfig.Id, "Backed up");
+                //    }
+
+                //    _backupGitRepoBackupConfig = null;
+                //    _backupRepoTask = null;
+                //}
+
+                //DisplayStatus("Ready");
             }
         }
 
         private void niNotify_MouseDoubleClick(object sender, MouseEventArgs e)
         {
-            if (_isTaskTray)
+            if (_runMode== RunModes.Tray)
             {
                 Show();
                 WindowState = FormWindowState.Normal;
@@ -291,7 +406,7 @@ namespace CFGitBackupUI
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             // If closing form with task tray then prompt user
-            if (e.CloseReason == CloseReason.UserClosing && _isTaskTray)
+            if (e.CloseReason == CloseReason.UserClosing && _runMode == RunModes.Tray)
             {
                 if (MessageBox.Show("Close application?", "Close", MessageBoxButtons.YesNo) == DialogResult.No)
                 {
@@ -305,9 +420,32 @@ namespace CFGitBackupUI
 
         private void MainForm_Resize(object sender, EventArgs e)
         {
-            if (_isTaskTray && FormWindowState.Minimized == WindowState)
+            if (_runMode == RunModes.Tray && FormWindowState.Minimized == WindowState)
             {
                 Hide();
+            }
+        }
+
+        private void debugListAllReposToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            // Get Git config
+            var gitConfig = _gitConfigService.GetAll().First();
+
+            // Get Git repo service
+            var gitRepoService = _gitRepoServices.First();
+            gitRepoService.SetConfig(gitConfig);
+
+            var gitRepos = gitRepoService.GetAllReposAsync().Result;
+
+            int xxx = 1000;
+        }
+
+        private void cancelBackupsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (MessageBox.Show("Cancel backups?", "Cancel Backup", MessageBoxButtons.YesNo) == DialogResult.Yes)
+            {
+                _backupConfigIdQueue.Clear();
+                _cancellationTokenSource.Cancel();
             }
         }
     }

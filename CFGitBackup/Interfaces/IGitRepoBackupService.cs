@@ -18,7 +18,7 @@ namespace CFGitBackup.Interfaces
         /// <param name="gitConfig"></param>        
         /// <param name="gitBackupConfig"></param>
         /// <returns></returns>
-        Task BackupRepoAsync(GitConfig gitConfig, GitRepoBackupConfig gitBackupConfig);
+        Task BackupRepoAsync(GitConfig gitConfig, GitRepoBackupConfig gitBackupConfig, CancellationToken cancellationToken);
 
         /// <summary>
         /// Get overdue backups

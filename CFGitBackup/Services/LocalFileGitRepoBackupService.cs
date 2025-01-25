@@ -21,7 +21,8 @@ namespace CFGitBackup.Services
             _gitRepoServices = gitRepoServices.ToList();
         }
 
-        public Task BackupRepoAsync(GitConfig gitConfig, GitRepoBackupConfig gitBackupConfig)
+        public Task BackupRepoAsync(GitConfig gitConfig, GitRepoBackupConfig gitBackupConfig,
+                                    CancellationToken cancellationToken)
         {
             // Check parameters
             if (String.IsNullOrEmpty(gitBackupConfig.LocalFolder))
@@ -56,16 +57,25 @@ namespace CFGitBackup.Services
                 // Clear existing content
                 fileStorage.Clear();
 
+                // Download
+                var isDownloadSuccess = false;
                 try
                 {
                     // Download Git repo
-                    gitRepoService.DownloadRepo(gitBackupConfig.RepoName, fileStorage).Wait();
-                }
+                    gitRepoService.DownloadRepo(gitBackupConfig.RepoName, fileStorage, cancellationToken).Wait();
+                    isDownloadSuccess = true;
+                }                
                 finally
                 {
 
                     // Flush changes
                     fileStorage.Close();
+
+                    // If failed then clean up partial backup
+                    if (!isDownloadSuccess)
+                    {
+                        fileStorage.Clear();
+                    }
                 }
 
                 /*
