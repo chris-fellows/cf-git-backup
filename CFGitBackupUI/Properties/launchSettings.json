@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "CFGitBackupUI": {
+      "commandName": "Project",
+      "commandLineArgs": "/Tray"
+    }
+  }
+}

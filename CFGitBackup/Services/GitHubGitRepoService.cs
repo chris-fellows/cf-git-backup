@@ -107,7 +107,14 @@ namespace CFGitBackup.Services
                     {
                         case "file":
                             var fileName = (string)item["name"];
-                            await DownloadFile((string)item["download_url"], new string[0], fileName, fileStorage, cancellationToken);
+                            var remoteUrl = (string)item["download_url"];
+
+                            // GitHub seems to record a file where a folder has been deleted. The web app shows a folder icon but when
+                            // you click then you get a "File not found" error.
+                            if (!String.IsNullOrEmpty(remoteUrl))
+                            {
+                                await DownloadFile(remoteUrl, new string[0], fileName, fileStorage, cancellationToken);
+                            }
                             break;
                         case "dir":
                             var folderName = (string)item["name"];
@@ -131,20 +138,27 @@ namespace CFGitBackup.Services
         private async Task DownloadFile(string remoteUrl, string[] folderNames, string fileName, IFileStorage fileStorage,
                                         CancellationToken cancellationToken)
         {
-            using (var httpClient = new HttpClient())
+            try
             {
-                SetDefaultHeaders(httpClient);
-
-                var response = httpClient.GetAsync(remoteUrl).Result;
-
-                // Read the content into a MemoryStream and then write to file
-                using (var memoryStream = await response.Content.ReadAsStreamAsync())
+                using (var httpClient = new HttpClient())
                 {
-                    var content = new byte[memoryStream.Length];
-                    memoryStream.Read(content, 0, content.Length);
+                    SetDefaultHeaders(httpClient);
 
-                    await fileStorage.WriteFileAsync(folderNames, fileName, content);
+                    var response = httpClient.GetAsync(remoteUrl).Result;
+
+                    // Read the content into a MemoryStream and then write to file
+                    using (var memoryStream = await response.Content.ReadAsStreamAsync())
+                    {
+                        var content = new byte[memoryStream.Length];
+                        memoryStream.Read(content, 0, content.Length);
+
+                        await fileStorage.WriteFileAsync(folderNames, fileName, content);
+                    }
                 }
+            }
+            catch(Exception exception)
+            {
+                throw;
             }
         }
 

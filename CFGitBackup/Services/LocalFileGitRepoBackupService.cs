@@ -54,6 +54,8 @@ namespace CFGitBackup.Services
                     _ => new LocalFileSystemFileStorage(gitBackupConfig.LocalFolder)
                 };
 
+                var repoName = gitBackupConfig.RepoName;
+
                 // Clear existing content
                 fileStorage.Clear();
 
@@ -113,7 +115,8 @@ namespace CFGitBackup.Services
 
             var overdue = gitRepoBackupConfigs.Where(c => c.Enabled &&
                     c.LastBackUpDate.Add(c.BackupFrequency) <= now)
-                .OrderBy(c => c.LastBackUpDate).ToList();
+                .OrderBy(c => c.LastBackUpDate)
+                .ThenBy(c => c.RepoName).ToList();
             
             return overdue;
         }
